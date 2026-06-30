@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>둥실둥실 지리 탐험대</title>
+    <style>
+        :root { 
+            --p1: #ff7675; --p2: #74b9ff; --p3: #fab1a0; --p4: #55efc4;
+            --main-blue: #81ecec;
+        }
+        
+        body { 
+            font-family: 'Malgun Gothic', sans-serif; 
+            /* 배경: 회색을 걷어내고 밝고 귀여운 하늘색 + 지도 배경 */
+            background: #a2d2ff url('https://www.transparenttextures.com/patterns/clouds.png');
+            background-image: linear-gradient(rgba(162, 210, 255, 0.6), rgba(162, 210, 255, 0.6)), url('https://img1.daumcdn.net/thumb/R1280x0/?scode=mtistory2&fname=https%3A%2F%2Fblog.kakaocdn.net%2Fdn%2FbcM9nO%2FbtrY7vQ6v5x%2FUKC9X3lKkKK9ySkhkXv6kK%2Fimg.png'); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            display: flex; flex-direction: column; align-items: center; 
+            margin: 0; padding: 5px; color: #2d3436; overflow: hidden; height: 100vh; 
+        }
+
+        #round-tracker { 
+            background: white; color: #0984e3; padding: 10px 50px; 
+            border-radius: 0 0 40px 40px; font-weight: 900; font-size: 24px; 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1); z-index: 10;
+            border: 4px solid white; border-top: none;
+        }
+
+        #scoreboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; width: 95%; max-width: 700px; margin: 15px 0; }
+        .score-box { 
+            padding: 12px; border-radius: 25px; background: rgba(255,255,255,0.9); 
+            text-align: center; border: 4px solid transparent; font-size: 16px; transition: 0.3s;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+        }
+        .score-box.active { background: #fff; border-color: #fdcb6e; transform: translateY(-8px); box-shadow: 0 15px 30px rgba(0,0,0,0.15); }
+        .score-box b { font-size: 22px; color: #2d3436; }
+
+        /* 말판 레이아웃: 투명하고 귀엽게 */
+        #board { 
+            display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); 
+            gap: 8px; width: 94vw; max-width: 640px; height: 94vw; max-height: 640px; 
+            background: rgba(255,255,255,0.3); padding: 15px; border-radius: 35px; position: relative;
+            border: 10px solid white; backdrop-filter: blur(5px);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.2);
+        }
+
+        .tile { 
+            background: rgba(255, 255, 255, 0.95); border-radius: 18px; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; font-size: 13px; text-align: center; 
+            color: #2d3436; position: relative; border-bottom: 6px solid #dfe6e9; font-weight: 900;
+            transition: 0.2s;
+        }
+        .tile.selectable { cursor: pointer; border: 5px solid #fdcb6e !important; animation: bounce 1s infinite; }
+        @keyframes bounce { 0%, 100% {transform: scale(1);} 50% {transform: scale(1.05);} }
+
+        .tile.special { background: #ffeaa7 !important; }
+        .tile.chance { background: #fab1a0 !important; }
+        .tile-icon { font-size: 28px; margin-bottom: 3px; }
+        .tile-point { position: absolute; bottom: 3px; right: 8px; font-size: 11px; color: #ff7675; }
+
+        #ui-center { 
+            grid-row: 2 / 8; grid-column: 2 / 8; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            background: rgba(255,255,255,0.1); border-radius: 40px; margin: 10px;
+        }
+
+        /* 3D 주사위 커스터마이징 */
+        .scene { width: 90px; height: 90px; perspective: 400px; margin-bottom: 25px; }
+        .dice { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 1s; }
+        .dice-face { position: absolute; width: 90px; height: 90px; background: white; border: 5px solid #74b9ff; line-height: 90px; font-size: 45px; font-weight: 900; color: #0984e3; text-align: center; border-radius: 20px; }
+        .front { transform: rotateY(0deg) translateZ(45px); } .back { transform: rotateY(180deg) translateZ(45px); }
+        .right { transform: rotateY(90deg) translateZ(45px); } .left { transform: rotateY(-90deg) translateZ(45px); }
+        .top { transform: rotateX(90deg) translateZ(45px); } .bottom { transform: rotateX(-90deg) translateZ(45px); }
+
+        .btn-group { display: flex; flex-direction: column; gap: 12px; width: 75%; }
+        button { 
+            padding: 15px; font-size: 22px; cursor: pointer; background: #74b9ff; 
+            color: white; border: none; border-radius: 25px; font-weight: 900; 
+            box-shadow: 0 8px #0984e3; transition: 0.1s;
+        }
+        button:active { transform: translateY(4px); box-shadow: none; }
+        .stop-btn { background: #ff7675; box-shadow: 0 8px #d63031; font-size: 18px; }
+
+        .piece { 
+            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            font-size: 32px; position: absolute; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 100; filter: drop-shadow(0 6px 6px rgba(0,0,0,0.2));
+        }
+
+        /* 퀴즈 모달 디자인 (귀엽게) */
+        #modal-bg { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); backdrop-filter: blur(8px); z-index:200; }
+        #modal { 
+            display: none; position: fixed; top:50%; left:50%; transform:translate(-50%, -50%); 
+            background:white; color: #2d3436; padding:35px; border-radius:50px; z-index:201; 
+            width:85%; max-width:480px; text-align:center; box-shadow: 0 30px 70px rgba(0,0,0,0.3);
+            border: 8px solid #74b9ff;
+        }
+        #timer-bar { width: 100%; height: 18px; background: #f1f2f6; border-radius: 15px; overflow: hidden; margin: 15px 0; }
+        #timer-progress { width: 100%; height: 100%; background: #ff7675; transition: width 1s linear; }
+        input { width: 85%; padding: 18px; font-size: 30px; border: 6px solid #74b9ff; border-radius: 25px; text-align: center; margin-bottom: 25px; outline: none; background: #f9f9f9; }
+
+        #result-screen { 
+            display: none; position: fixed; top:0; left:0; width:100%; height:100%; 
+            background: #a2d2ff; z-index:500; flex-direction: column; align-items: center; justify-content: center; 
+        }
+        #status-msg { font-weight: 900; color: #0984e3; margin-top: 15px; font-size: 20px; text-shadow: 1px 1px 0px white; }
+    </style>
+</head>
+<body>
+
+    <audio id="bgm" loop>
+        <source src="https://assets.mixkit.co/music/preview/mixkit-funny-game-loop-2826.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="round-tracker">ROUND <span id="curr-round">1</span></div>
+
+    <div id="scoreboard">
+        <div class="score-box active" id="score-0">🦁 1번<br><b>100</b></div>
+        <div class="score-box" id="score-1">🦊 2번<br><b>100</b></div>
+        <div class="score-box" id="score-2">🐼 3번<br><b>100</b></div>
+        <div class="score-box" id="score-3">🐰 4번<br><b>100</b></div>
+    </div>
+
+    <div id="board">
+        <div id="ui-center">
+            <div class="scene">
+                <div class="dice" id="dice">
+                    <div class="dice-face front">1</div><div class="dice-face back">6</div>
+                    <div class="dice-face right">3</div><div class="dice-face left">4</div>
+                    <div class="dice-face top">5</div><div class="dice-face bottom">2</div>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button id="dice-btn" onclick="handleTurn()">주사위 던지기!</button>
+                <button class="stop-btn" onclick="confirmEnd()">모험 끝내기</button>
+            </div>
+            <p id="status-msg">🦁 1번 친구 차례!</p>
+        </div>
+        <div class="piece" id="piece-0">🦁</div><div class="piece" id="piece-1">🦊</div>
+        <div class="piece" id="piece-2">🐼</div><div class="piece" id="piece-3">🐰</div>
+    </div>
+
+    <div id="modal-bg"></div>
+    <div id="modal">
+        <div id="timer-container">
+            <div id="timer-text" style="font-weight:900; color:#ff7675; font-size:20px;">남은 시간: 60초</div>
+            <div id="timer-bar"><div id="timer-progress"></div></div>
+        </div>
+        <div id="m-quiz" style="font-size:22px; font-weight:900; margin: 25px 0; word-break: keep-all; line-height:1.4;"></div>
+        <input type="text" id="m-answer" placeholder="정답은 무엇일까?" autocomplete="off">
+        <button onclick="checkAnswer()" style="width:100%; padding:18px; background:#55efc4; color:white; border-radius:25px; border:none; font-weight:900; font-size:22px; cursor:pointer; box-shadow: 0 8px #00b894;">정답 확인!</button>
+    </div>
+
+    <div id="result-screen">
+        <h1 style="font-size:60px; color:white; text-shadow: 4px 4px 0px #74b9ff;">🥇 오늘의 지리 왕! 🥇</h1>
+        <div id="rank-list"></div>
+        <button onclick="location.reload()" style="margin-top:35px; background:white; color:#74b9ff; padding:20px 60px; border:none; border-radius:30px; font-weight:900; font-size:24px; cursor:pointer; box-shadow: 0 8px #dfe6e9;">처음으로!</button>
+    </div>
+
+<script>
+    // 나라별 문제 은행 및 아이콘 수정 (문자 아이콘 -> 이모지 아이콘)
+    const tilesData = [
+        { name: "시작", type: "special", icon: "🚩", r:1, c:1 },
+        { label: "아시아", icon: "🇨🇳", value: 50, r:1, c:2, 
+          pool: [
+            {q: "위도 북위 20~50도, 경도 동경 80~130도 사이. 황해와 접한 아시아 영토 대국은?", a: "중국"},
+            {q: "만리장성으로 유명하며, 우리나라 서쪽에 위치한 거대한 영토의 나라는?", a: "중국"}
+          ] 
+        },
+        { label: "아시아", icon: "🗻", value: 50, r:1, c:3, 
+          pool: [
+            {q: "위도 북위 30~45도, 경도 동경 130~145도. 태평양에 위치한 아시아 섬나라는?", a: "일본"},
+            {q: "초밥과 후지산으로 유명하며, 아시아 동쪽 끝에 위치한 나라는?", a: "일본"}
+          ]
+        },
+        { name: "찬스", type: "chance", icon: "❓", r:1, c:4 },
+        { label: "아시아", icon: "🛶", value: 60, r:1, c:5, 
+          pool: [
+            {q: "위도 북위 8~23도, 경도 동경 102~110도 사이. 하노이를 수도로 둔 나라는?", a: "베트남"},
+            {q: "쌀국수로 유명한 동남아시아의 긴 모양 국가는?", a: "베트남"}
+          ]
+        },
+        { label: "아시아", icon: "🕌", value: 70, r:1, c:6, 
+          pool: [
+            {q: "위도 북위 8~35도, 경도 동경 68~97도. 서쪽은 아라비아해, 동쪽은 벵골만인 나라는?", a: "인도"},
+            {q: "타지마할로 유명하며 남부 아시아에 위치한 거대한 국가는?", a: "인도"}
+          ]
+        },
+        { label: "아시아", icon: "🏜️", value: 100, r:1, c:7, 
+          pool: [
+            {q: "위도 북위 16~32도, 경도 동경 34~55도. 홍해와 페르시아만 사이의 석유 부국은?", a: "사우디아라비아", a2: "사우디"},
+            {q: "아라비아 반도의 대부분을 차지하는 사막 국가는?", a: "사우디아라비아", a2: "사우디"}
+          ]
+        },
+        { label: "유라시아", icon: "❄️", value: 60, r:1, c:8, 
+          pool: [
+            {q: "위도 북위 41~82도, 동경 19도~서경 170도. 세계에서 영토가 가장 넓은 나라는?", a: "러시아"},
+            {q: "북쪽은 북극해와 접해 있으며, 시베리아로 유명한 나라는?", a: "러시아"}
+          ]
+        },
+        { label: "오세아니아", icon: "🦘", value: 70, r:2, c:8, 
+          pool: [
+            {q: "남반구에 위치. 위도 남위 10~40도, 경도 동경 113~153도. 거대한 대륙 국가는?", a: "호주", a2: "오스트레일리아"},
+            {q: "캥거루와 코알라가 살고 있는 오세아니아의 큰 나라는?", a: "호주", a2: "오스트레일리아"}
+          ]
+        },
+        { label: "오세아니아", icon: "🥝", value: 80, r:3, c:8, 
+          pool: [
+            {q: "위도 남위 34~47도, 경도 동경 166~178도. 두 개의 큰 섬으로 이루어진 섬나라는?", a: "뉴질랜드"},
+            {q: "키위새와 마오리족 문화로 유명한 나라는?", a: "뉴질랜드"}
+          ]
+        },
+        { name: "무인도", type: "special", icon: "🏝️", r:4, c:8 },
+        { label: "북미", icon: "🗽", value: 50, r:5, c:8, 
+          pool: [
+            {q: "위도 북위 25~49도, 경도 서경 67~125도. 대서양과 태평양을 모두 접한 북미 국가는?", a: "미국"},
+            {q: "자유의 여신상이 있는 세계 최대 강대국은?", a: "미국"}
+          ]
+        },
+        { label: "북미", icon: "🍁", value: 60, r:6, c:8, 
+          pool: [
+            {q: "위도 북위 41~83도, 경도 서경 52~141도. 미국 북쪽에 위치한 영토 2위 국가는?", a: "캐나다"},
+            {q: "단풍잎이 국기에 그려져 있는 나라는?", a: "캐나다"}
+          ]
+        },
+        { name: "찬스", type: "chance", icon: "❓", r:7, c:8 },
+        { label: "북미", icon: "🌮", value: 70, r:8, c:8, 
+          pool: [
+            {q: "위도 북위 14~32도, 경도 서경 86~118도. 미국 남쪽에 있는 타코의 나라는?", a: "멕시코"},
+            {q: "아스텍과 마야 문명 유적이 남아있는 나라는?", a: "멕시코"}
+          ]
+        },
+        { label: "남미", icon: "🌲", value: 70, r:8, c:7, 
+          pool: [
+            {q: "남미 최대 국가. 적도가 영토 북부를 지나며 삼바 축제로 유명한 나라는?", a: "브라질"},
+            {q: "아마존 열대 우림이 펼쳐져 있는 축구의 나라는?", a: "브라질"}
+          ]
+        },
+        { label: "남미", icon: "📏", value: 90, r:8, c:6, 
+          pool: [
+            {q: "위도 남위 17~56도. 남북으로 매우 길게 뻗은 남아메리카 서쪽 나라는?", a: "칠레"},
+            {q: "안데스 산맥을 따라 지팡이처럼 길게 생긴 나라는?", a: "칠레"}
+          ]
+        },
+        { label: "남미", icon: "⛰️", value: 80, r:8, c:5, 
+          pool: [
+            {q: "위도 남위 0~18도. 마추픽추 유적이 있는 안데스 산맥의 국가는?", a: "페루"},
+            {q: "잉카 문명의 발상지인 남아메리카 국가는?", a: "페루"}
+          ]
+        },
+        { name: "세계여행", type: "special", icon: "✈️", r:8, c:4 },
+        { label: "아프리카", icon: "🐫", value: 70, r:8, c:3, 
+          pool: [
+            {q: "위도 북위 22~31도. 피라미드와 스핑크스로 유명한 아프리카 국가는?", a: "이집트"},
+            {q: "나일강이 흐르며 사막이 펼쳐진 북아프리카 나라는?", a: "이집트"}
+          ]
+        },
+        { label: "아프리카", icon: "🦒", value: 90, r:8, c:2, 
+          pool: [
+            {q: "아프리카 동부 적도 부근. 사파리와 마사이족으로 유명한 국가는?", a: "케냐"},
+            {q: "야생 동물의 낙원이라 불리는 아프리카 국가는?", a: "케냐"}
+          ]
+        },
+        { label: "아프리카", icon: "🇿🇦", value: 80, r:8, c:1, 
+          pool: [
+            {q: "아프리카 최남단. 대서양과 인도양을 모두 접한 나라는?", a: "남아공", a2: "남아프리카공화국"},
+            {q: "희망봉이 있는 아프리카에서 가장 아래쪽 국가는?", a: "남아공", a2: "남아프리카공화국"}
+          ]
+        },
+        { label: "유럽", icon: "🕰️", value: 60, r:7, c:1, 
+          pool: [
+            {q: "경도 0도가 통과하는 유럽 서부 섬나라. 빅벤이 있는 곳은?", a: "영국"},
+            {q: "런던을 수도로 둔 유럽의 역사 깊은 섬나라는?", a: "영국"}
+          ]
+        },
+        { label: "유럽", icon: "🗼", value: 60, r:6, c:1, 
+          pool: [
+            {q: "위도 북위 42~51도. 에펠탑과 예술로 유명한 유럽 나라는?", a: "프랑스"},
+            {q: "파리를 수도로 둔 서유럽의 나라는?", a: "프랑스"}
+          ]
+        },
+        { name: "찬스", type: "chance", icon: "❓", r:5, c:1 },
+        { label: "유럽", icon: "🍺", value: 60, r:4, c:1, 
+          pool: [
+            {q: "위도 북위 47~55도. 유럽 중앙의 경제 대국이며 맥주로 유명한 나라는?", a: "독일"},
+            {q: "베를린을 수도로 둔 자동차 산업이 발달한 나라는?", a: "독일"}
+          ]
+        },
+        { label: "유럽", icon: "🏔️", value: 80, r:3, c:1, 
+          pool: [
+            {q: "알프스 산맥이 대부분을 차지하는 유럽 중앙의 내륙 국가는?", a: "스위스"},
+            {q: "초콜릿과 정밀 시계 제조로 유명한 중립국은?", a: "스위스"}
+          ]
+        },
+        { label: "유럽", icon: "🍕", value: 70, r:2, c:1, 
+          pool: [
+            {q: "위도 북위 36~47도. 지중해로 뻗은 장화 모양의 국가는?", a: "이탈리아"},
+            {q: "피자와 파스타, 콜로세움으로 유명한 유럽 반도 나라는?", a: "이탈리아"}
+          ]
+        }
+    ];
+
+    let players = [
+        {score:100, pos:0, worldTravel: false}, 
+        {score:100, pos:0, worldTravel: false}, 
+        {score:100, pos:0, worldTravel: false}, 
+        {score:100, pos:0, worldTravel: false}
+    ];
+    let turn = 0, round = 1, isMoving = false, isSelecting = false, timerInterval = null;
+    let currentCorrectAns = "", currentCorrectAns2 = "";
+    const pIcons = ['🦁', '🦊', '🐼', '🐰'];
+    const pColors = ['#ff7675', '#74b9ff', '#fab1a0', '#55efc4'];
+
+    const board = document.getElementById('board');
+    tilesData.forEach((tile, i) => {
+        const t = document.createElement('div');
+        t.className = `tile ${tile.type || ''}`;
+        t.style.gridRow = tile.r; t.style.gridColumn = tile.c;
+        t.innerHTML = `<div class="tile-icon">${tile.icon}</div>${tile.name || tile.label}${tile.value ? `<div class="tile-point">${tile.value}P</div>` : ''}`;
+        t.id = `tile-${i}`;
+        t.onclick = () => selectTile(i);
+        board.appendChild(t);
+    });
+
+    function updateView() {
+        players.forEach((p, i) => {
+            const tile = document.getElementById(`tile-${p.pos}`);
+            const piece = document.getElementById(`piece-${i}`);
+            const offsets = [[2,2], [22,2], [2,22], [22,22]];
+            piece.style.top = (tile.offsetTop + offsets[i][1]) + 'px';
+            piece.style.left = (tile.offsetLeft + offsets[i][0]) + 'px';
+            document.getElementById(`score-${i}`).querySelector('b').innerText = p.score;
+            document.getElementById(`score-${i}`).classList.toggle('active', turn === i);
+        });
+        const btn = document.getElementById('dice-btn');
+        if (players[turn].worldTravel) {
+            btn.innerText = "세계여행 출발! ✨";
+            btn.style.background = "#fdcb6e";
+            btn.style.boxShadow = "0 8px #e17055";
+        } else {
+            btn.innerText = "주사위 던지기! 🎲";
+            btn.style.background = "#74b9ff";
+            btn.style.boxShadow = "0 8px #0984e3";
+        }
+    }
+
+    function handleTurn() {
+        if (isMoving || isSelecting) return;
+        document.getElementById('bgm').play().catch(()=>{});
+        if (players[turn].worldTravel) startWorldTravel();
+        else rollDice();
+    }
+
+    async function rollDice() {
+        isMoving = true;
+        document.getElementById('dice-btn').disabled = true;
+        const dice = document.getElementById('dice');
+        dice.style.animation = "rolling 0.1s infinite linear";
+        await new Promise(r => setTimeout(r, 800));
+        dice.style.animation = "none";
+        const val = Math.floor(Math.random()*6)+1;
+        const rots = [{x:0,y:0},{x:90,y:0},{x:0,y:-90},{x:0,y:90},{x:-90,y:0},{x:0,y:180}];
+        const r = rots[val-1];
+        dice.style.transform = `translateZ(-45px) rotateX(${r.x}deg) rotateY(${r.y}deg)`;
+        await new Promise(r => setTimeout(r, 600));
+
+        for(let i=0; i<val; i++) {
+            const oldPos = players[turn].pos;
+            players[turn].pos = (players[turn].pos + 1) % tilesData.length;
+            if (players[turn].pos === 0 && oldPos !== 0) {
+                players[turn].score += 100;
+                showLapBonus();
+            }
+            updateView();
+            await new Promise(res => setTimeout(res, 200));
+        }
+        processTile();
+    }
+
+    function showLapBonus() {
+        const msg = document.createElement('div');
+        msg.innerText = "🎈 시작점 통과! 보너스 +100P!";
+        msg.style.position = 'fixed'; msg.style.top = '15%'; msg.style.left = '50%';
+        msg.style.transform = 'translateX(-50%)'; msg.style.background = '#55efc4';
+        msg.style.color = 'white'; msg.style.padding = '15px 40px'; msg.style.borderRadius = '40px';
+        msg.style.zIndex = '1000'; msg.style.fontWeight = '900'; msg.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+        document.body.appendChild(msg);
+        setTimeout(() => msg.remove(), 1500);
+    }
+
+    function startWorldTravel() {
+        isSelecting = true;
+        document.getElementById('status-msg').innerText = "✈️ 가고 싶은 칸을 골라보세요!";
+        tilesData.forEach((_, i) => document.getElementById(`tile-${i}`).classList.add('selectable'));
+    }
+
+    async function selectTile(index) {
+        if (!isSelecting) return;
+        isSelecting = false;
+        players[turn].worldTravel = false;
+        tilesData.forEach((_, i) => document.getElementById(`tile-${i}`).classList.remove('selectable'));
+        players[turn].pos = index;
+        updateView();
+        await new Promise(r => setTimeout(r, 500));
+        processTile();
+    }
+
+    function processTile() {
+        const tile = tilesData[players[turn].pos];
+        if (tile.name === "세계여행") {
+            players[turn].worldTravel = true;
+            alert("✈️ 세계여행! 다음 턴에 원하는 곳으로 날아갈 수 있어요!");
+            nextTurn();
+        } else if (tile.type === 'special' || tile.type === 'chance') {
+            if (tile.type === 'chance') {
+                const bonus = [50, 100, -50][Math.floor(Math.random()*3)];
+                players[turn].score += bonus;
+                alert(`❓ 지리 찬스! 점수가 ${bonus}P 바뀌었습니다.`);
+            }
+            nextTurn();
+        } else if (tile.owner !== undefined && tile.owner !== turn) {
+            const fee = Math.floor(tile.value * 0.5);
+            players[turn].score -= fee;
+            players[tile.owner].score += fee;
+            alert(`🏘️ ${pIcons[tile.owner]} 친구의 땅이에요! 통행료 ${fee}P를 냈습니다.`);
+            nextTurn();
+        } else {
+            openQuiz(tile);
+        }
+    }
+
+    function openQuiz(tile) {
+        const quizObj = tile.pool[Math.floor(Math.random() * tile.pool.length)];
+        currentCorrectAns = quizObj.a;
+        currentCorrectAns2 = quizObj.a2 || "";
+
+        document.getElementById('modal-bg').style.display = 'block';
+        document.getElementById('modal').style.display = 'block';
+        document.getElementById('m-quiz').innerText = quizObj.q;
+        const input = document.getElementById('m-answer');
+        input.value = ''; input.focus();
+
+        let timeLeft = 60;
+        const progress = document.getElementById('timer-progress');
+        document.getElementById('timer-text').innerText = `남은 시간: ${timeLeft}초`;
+        progress.style.width = '100%';
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer-text').innerText = `남은 시간: ${timeLeft}초`;
+            progress.style.width = (timeLeft / 60 * 100) + '%';
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                alert("⏰ 시간 초과! 아쉽지만 다음 기회에!");
+                closeModal();
+                nextTurn();
+            }
+        }, 1000);
+    }
+
+    function checkAnswer() {
+        clearInterval(timerInterval);
+        const input = document.getElementById('m-answer').value.trim().replace(/\s/g, "");
+        if(!input) return;
+        const tile = tilesData[players[turn].pos];
+        const isCorrect = (input === currentCorrectAns.replace(/\s/g, "") || (currentCorrectAns2 && input === currentCorrectAns2.replace(/\s/g, "")));
+
+        if (isCorrect) {
+            alert(`✅ 정답! ${tile.value}P를 얻고 땅을 점령했어요!`);
+            players[turn].score += tile.value;
+            tile.owner = turn;
+            const el = document.getElementById(`tile-${players[turn].pos}`);
+            el.style.background = pColors[turn]; el.style.color = 'white';
+            el.innerHTML = `<div class="tile-icon">${tile.icon}</div>${currentCorrectAns}`;
+        } else {
+            alert(`❌ 틀렸습니다! 더 열심히 공부해서 다시 도전해요!`);
+        }
+        closeModal();
+        nextTurn();
+    }
+
+    function closeModal() {
+        document.getElementById('modal-bg').style.display = 'none';
+        document.getElementById('modal').style.display = 'none';
+        clearInterval(timerInterval);
+    }
+
+    function nextTurn() {
+        turn = (turn + 1) % 4;
+        if (turn === 0) {
+            round++;
+            document.getElementById('curr-round').innerText = round;
+        }
+        document.getElementById('status-msg').innerText = `${pIcons[turn]} ${turn+1}번 친구 차례!`;
+        document.getElementById('dice-btn').disabled = false;
+        isMoving = false;
+        updateView();
+    }
+
+    function confirmEnd() {
+        if (confirm("탐험을 마치고 결과를 확인해볼까요?")) {
+            const sorted = players.map((p, i) => ({id:i, score:p.score})).sort((a,b) => b.score - a.score);
+            const list = document.getElementById('rank-list');
+            list.innerHTML = "";
+            sorted.forEach((p, idx) => {
+                list.innerHTML += `<div style="background:white; width:340px; padding:20px; margin:10px; border-radius:30px; font-size:28px; font-weight:900; display:flex; justify-content:space-between; border: 5px solid ${pColors[p.id]}; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                    <span>${idx+1}등 ${pIcons[p.id]}</span> <span>${p.score}P</span>
+                </div>`;
+            });
+            document.getElementById('result-screen').style.display = 'flex';
+        }
+    }
+
+    document.getElementById('m-answer').onkeyup = (e) => { if(e.key==='Enter') checkAnswer(); };
+    window.onload = updateView;
+</script>
+
+<style>
+    @keyframes rolling {
+        0% { transform: translateZ(-45px) rotateX(0) rotateY(0); }
+        100% { transform: translateZ(-45px) rotateX(360deg) rotateY(360deg); }
+    }
+</style>
+</body>
+</html>
